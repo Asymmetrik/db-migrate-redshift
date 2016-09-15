@@ -283,6 +283,9 @@ var PgDriver = Base.extend({
         if (spec.unique) {
             constraint.push('UNIQUE');
         }
+        if(spec.encode) {
+            constraint.push('ENCODE '+spec.encode);
+        }
 
         if (typeof spec.defaultValue != 'undefined') {
             constraint.push('DEFAULT');
@@ -386,8 +389,8 @@ var PgDriver = Base.extend({
       }
       var columns = Object.keys(fieldMapping);
       var referencedColumns = columns.map(function (key) { return '"' + fieldMapping[key] + '"'; });
-      var sql = util.format('ALTER TABLE "%s" ADD CONSTRAINT "%s" FOREIGN KEY (%s) REFERENCES "%s" (%s) ON DELETE %s ON UPDATE %s',
-        tableName, keyName, this.quoteDDLArr(columns), referencedTableName, referencedColumns, rules.onDelete || 'NO ACTION', rules.onUpdate || 'NO ACTION');
+      var sql = util.format('ALTER TABLE "%s" ADD CONSTRAINT "%s" FOREIGN KEY (%s) REFERENCES "%s" (%s)',
+        tableName, keyName, this.quoteDDLArr(columns), referencedTableName, referencedColumns);
       return this.runSql(sql).nodeify(callback);
     },
 
