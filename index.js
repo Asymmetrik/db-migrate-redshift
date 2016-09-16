@@ -265,6 +265,82 @@ var PgDriver = Base.extend({
         }.bind(this)).nodeify(callback);
     },
 
+    createTable: function(tableName, options, callback, tableOpts) {
+        log.verbose('creating table:', tableName);
+        var columnSpecs = options;
+        var tableOptions = {};
+
+        if (options.columns !== undefined) {
+            columnSpecs = options.columns;
+            delete options.columns;
+            tableOptions = options;
+        }
+
+        var ifNotExistsSql = "";
+        if(tableOptions.ifNotExists) {
+            ifNotExistsSql = "IF NOT EXISTS";
+        }
+
+        var primaryKeyColumns = [];
+        var columnDefOptions = {
+            emitPrimaryKey: false
+        };
+
+        for (var columnName in columnSpecs) {
+            var columnSpec = this.normalizeColumnSpec(columnSpecs[columnName]);
+            columnSpecs[columnName] = columnSpec;
+            if (columnSpec.primaryKey) {
+                primaryKeyColumns.push(columnName);
+            }
+        }
+
+        var pkSql = '';
+        if (primaryKeyColumns.length > 1) {
+            pkSql = util.format(', PRIMARY KEY (%s)',
+                this.quoteDDLArr(primaryKeyColumns).join(', '));
+
+        } else {
+            columnDefOptions.emitPrimaryKey = true;
+        }
+
+        var columnDefs = [];
+        var foreignKeys = [];
+
+        for (var columnName in columnSpecs) {
+            var columnSpec = columnSpecs[columnName];
+            var constraint = this.createColumnDef(columnName, columnSpec, columnDefOptions, tableName);
+
+            columnDefs.push(constraint.constraints);
+            if (constraint.foreignKey)
+                foreignKeys.push(constraint.foreignKey);
+        }
+
+        var tableDefs = '';
+        if (tableOpts) {
+            if (tableOpts.sort) {
+                var columns = tableOpts.sort.keys.join(', ');
+                tableDefs += tableOpts.sort.type+' sortkey('+columns+') ';
+            }
+            if (tableOpts.dist) {
+                if (tableOpts.dist.style) {
+                    tableDefs += 'diststyle ' + tableOpts.dist.style + ' ';
+                }
+                if (tableOpts.dist.key) {
+                    tableDefs += 'distkey(' + tableOpts.dist.key + ')';
+                }
+            }
+        }
+        var sql = util.format('CREATE TABLE %s %s (%s%s) %s', ifNotExistsSql,
+            this.escapeDDL(tableName), columnDefs.join(', '), pkSql, tableDefs);
+        console.log(sql);
+
+        return this.runSql(sql)
+            .then(function()
+            {
+                return this.recurseCallbackArray(foreignKeys);
+            }.bind(this)).nodeify(callback);
+    },
+
     createColumnConstraint: function(spec, options, tableName, columnName) {
         var constraint = [],
             cb;
@@ -286,19 +362,24 @@ var PgDriver = Base.extend({
         if(spec.encode) {
             constraint.push('ENCODE '+spec.encode);
         }
+        if (spec.sortkey === true) {
+            constraint.push('SORTKEY');
+        }
+        if (spec.distkey === true) {
+            constraint.push('DISTKEY');
+        }
 
         if (typeof spec.defaultValue != 'undefined') {
             constraint.push('DEFAULT');
             if (typeof spec.defaultValue == 'string'){
                 constraint.push("'" + spec.defaultValue + "'");
             } else {
-              constraint.push(spec.defaultValue);
+                constraint.push(spec.defaultValue);
             }
         }
 
         if (spec.foreignKey) {
-
-          cb = this.bindForeignKey(tableName, columnName, spec.foreignKey);
+            cb = this.bindForeignKey(tableName, columnName, spec.foreignKey);
         }
 
         return { foreignKey: cb, constraints: constraint.join(' ') };
