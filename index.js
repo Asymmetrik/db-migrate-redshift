@@ -317,10 +317,6 @@ var PgDriver = Base.extend({
 
         var tableDefs = '';
         if (tableOpts) {
-            if (tableOpts.sort) {
-                var columns = tableOpts.sort.keys.join(', ');
-                tableDefs += tableOpts.sort.type+' sortkey('+columns+') ';
-            }
             if (tableOpts.dist) {
                 if (tableOpts.dist.style) {
                     tableDefs += 'diststyle ' + tableOpts.dist.style + ' ';
@@ -328,6 +324,10 @@ var PgDriver = Base.extend({
                 if (tableOpts.dist.key) {
                     tableDefs += 'distkey(' + tableOpts.dist.key + ')';
                 }
+            }
+            if (tableOpts.sort) {
+                var columns = tableOpts.sort.keys.join(', ');
+                tableDefs += tableOpts.sort.style+' sortkey('+columns+') ';
             }
         }
         var sql = util.format('CREATE TABLE %s %s (%s%s) %s', ifNotExistsSql,
